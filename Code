@@ -1,0 +1,138 @@
+#include <SD.h>
+#include <SHT1x.h>
+#include <Wire.h>
+#include "RTClib.h"
+
+RTC_DS1307 RTC;
+// Specify data and clock connections and instantiate SHT1x object
+#define dataPin  6
+#define clockPin 5
+SHT1x sht1x(dataPin, clockPin);
+// On the Ethernet Shield, CS is pin 4. Note that even if it's not
+// used as the CS pin, the hardware CS pin (10 on most Arduino boards,
+// 53 on the Mega) must be left as an output or the SD library
+// functions will not work.
+const int chipSelect = 4;
+
+void showDate(const char* txt, const DateTime& dt) {
+    Serial.print(txt);
+    Serial.print(' ');
+    Serial.print(dt.year(), DEC);
+    Serial.print('/');
+    Serial.print(dt.month(), DEC);
+    Serial.print('/');
+    Serial.print(dt.day(), DEC);
+    Serial.print(' ');
+    Serial.print(dt.hour(), DEC);
+    Serial.print(':');
+    Serial.print(dt.minute(), DEC);
+    Serial.print(':');
+    Serial.print(dt.second(), DEC);
+    
+    Serial.println();
+}
+
+void setup()
+{
+  Serial.begin(9600);
+  Serial.print("Initializing SD card...");
+  // make sure that the default chip select pin is set to
+  // output, even if you don't use it:
+  pinMode(10, OUTPUT);
+  
+  Wire.begin();
+    RTC.begin();
+    
+    if (! RTC.isrunning()) {
+        Serial.println("RTC is NOT running!");
+    }
+    Serial.println("Setting RTC clock to: date __DATE__ and time __TIME__");
+    RTC.adjust(DateTime(__DATE__, __TIME__));
+    
+    DateTime dt0 (2011, 6, 23, 7, 52, 0);
+    showDate("dt0", dt0);
+
+    DateTime now = RTC.now();
+    showDate("now", now);
+  
+  // see if the card is present and can be initialized:
+  if (!SD.begin(chipSelect)) {
+    Serial.println("Card failed, or not present");
+    // don't do anything more:
+    return;
+  }
+  Serial.println("card initialized.");
+}
+
+void loop()
+{
+   delay(1000);
+    showDate("now", RTC.now());
+    DateTime now = RTC.now();
+    
+  // make a string for assembling the data to log:
+  String dataString = "";
+  float temp_c;
+  float temp_f;
+  float humidity;
+
+  // Read values from the sensor
+  temp_c = sht1x.readTemperatureC();
+  temp_f = sht1x.readTemperatureF();
+  humidity = sht1x.readHumidity();
+
+  // Print the values to the serial port
+  Serial.print("Temperature: ");
+  Serial.print(temp_c, DEC);
+  Serial.print("C / ");
+  Serial.print(temp_f, DEC);
+  Serial.print("F. Humidity: ");
+  Serial.print(humidity);
+  Serial.println("%");
+
+  // read three sensors and append to the string:
+
+    //int sensor = analogRead(analogPin);
+    
+    dataString += String(now.year());
+    dataString += "/"; 
+    dataString += String(int(now.month()));
+    dataString += "/";
+    dataString += String(int(now.day()));
+    dataString += "/"; 
+    dataString += String(int(now.hour()));
+    dataString += ":"; 
+    dataString += String(int(now.minute()));
+    dataString += ":";
+    dataString += String(int(now.second()));
+    dataString += ":";
+    int precision = 2;
+    int scratch_size = 2+precision;
+    char scratch[80];
+    dtostrf(humidity, scratch_size, precision, scratch);
+    dataString += scratch;
+    dataString += ","; 
+    dtostrf(temp_f, scratch_size, precision, scratch);
+    dataString += scratch;
+    dataString += ",";
+    dtostrf(temp_c, scratch_size, precision, scratch);
+    dataString += scratch;
+    dataString += ","; 
+
+  // open the file. note that only one file can be open at a time,
+  // so you have to close this one before opening another.
+  File dataFile = SD.open("datalog.txt", FILE_WRITE);
+
+  // if the file is available, write to it:
+   Serial.println(dataString);
+  if (dataFile) {
+    dataFile.println(dataString);
+    dataFile.close();
+    // print to the serial port too:
+   
+  }  
+  // if the file isn't open, pop up an error:
+  else {
+    Serial.println("error opening datalog.txt");
+  } 
+}
